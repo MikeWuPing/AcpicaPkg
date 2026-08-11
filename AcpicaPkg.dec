@@ -1,0 +1,24 @@
+## @file
+# AcpicaPkg - ACPICA disassembler library package for UEFI (EDK2).
+#
+# The upstream ACPICA source tree is a git submodule under
+# Library/AcpicaDisasmLib/acpica (pinned to tag 20260408, see README.md).
+# No file inside acpica/ is ever modified; the UEFI adaptation lives in the
+# AcpicaDisasmLib port layer (OSL / stubs / public wrapper).
+#
+# NOTE: keep this file pure ASCII - BaseTools reads meta files with the
+# OS locale encoding (cp936 here), non-ASCII bytes can break the parser.
+
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = AcpicaPkg
+  PACKAGE_GUID                   = 1A5D9E3B-7F4C-4B61-A2D8-0C3F5E9B7D14
+  PACKAGE_VERSION                = 0.1
+
+[Includes]
+  Include
+
+[LibraryClasses]
+  ##  ACPICA AML disassembler library (ACPI disassembly; pristine upstream
+  ##  mirror + UEFI OSL / stubs / wrapper). Produces AcpicaDisasmAml().
+  AcpicaLib|Include/Library/AcpicaLib.h

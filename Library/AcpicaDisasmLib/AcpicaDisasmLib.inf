@@ -1,0 +1,136 @@
+## @file
+# AcpicaDisasmLib - ACPICA disassembler engine + UEFI OSL/stubs/wrapper.
+#
+# The upstream ACPICA sources below are the pristine gitignored clone at
+# AcpicaPkg/Library/AcpicaDisasmLib/acpica (tag 20260408). None of them is
+# ever modified; all adaptation is injected via build defines and the three
+# port files at the bottom of [Sources].
+#
+# Build config notes:
+#  - _EDK2_EFI            -> acenv.h selects platform/acefi.h (UEFI OSL model)
+#  - ACPI_DISASSEMBLER=1  -> compiles the disassembler code paths
+#  - ACPI_DEBUG_OUTPUT=0  -> ACPICA-internal DEBUG macros compiled out
+#  - ACPI_USE_LOCAL_CACHE=1 -> ACPI_CACHE_T = ACPI_MEMORY_LIST; the cache OSL
+#    functions (AcpiOsCreateCache & friends) are provided by AcpicaOsUefi.c
+#    with plain-alloc semantics, so upstream utcache.c stays uncompiled.
+#  - No ACPI_APPLICATION / ACPI_ASL_COMPILER / USE_STDLIB: no stdlib deps.
+#  - /utf-8 + /wd4819: ACPICA sources carry UTF-8 comments.
+#  - MODULE_TYPE must be UEFI_DRIVER (not BASE): the OSL consumes gBS and
+#    AllocatePool(); the MdePkg Uefi*Lib instances restrict their
+#    LIBRARY_CLASS to DXE-phase module types.
+#
+# NOTE: keep this file pure ASCII - BaseTools reads meta files with the
+# OS locale encoding (cp936 here), non-ASCII bytes can break the parser.
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = AcpicaDisasmLib
+  FILE_GUID                      = 8C2E4F1A-93B7-4D5E-A6C1-2F8D4B7E0A35
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = AcpicaLib
+
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /D_EDK2_EFI /DACPI_DISASSEMBLER=1 /DACPI_DEBUG_OUTPUT=0 /DACPI_USE_LOCAL_CACHE=1 /I$(WORKSPACE)/AcpicaPkg/Library/AcpicaDisasmLib/acpica/source/include /utf-8 /wd4005 /wd4018 /wd4100 /wd4133 /wd4244 /wd4267 /wd4389 /wd4701 /wd4819 /WX-
+
+[Sources]
+  # utilities (all .c except utcache.c - cache OSL lives in AcpicaOsUefi.c)
+  acpica/source/components/utilities/utaddress.c
+  acpica/source/components/utilities/utalloc.c
+  acpica/source/components/utilities/utascii.c
+  acpica/source/components/utilities/utbuffer.c
+  acpica/source/components/utilities/utcksum.c
+  # utclib.c (upstream mini-libc) is NOT compiled: with ACPI_USE_SYSTEM_CLIBRARY
+  # undefined it defines memcpy/memset/memmove/memcmp, colliding with the
+  # app's CompilerIntrinsicsLib under /WHOLEARCHIVE (LNK2005, M8 Task 7).
+  # The str* functions the closure needs are ported into AcpicaStubs.c;
+  # mem* resolve from the app's CompilerIntrinsicsLib.
+  acpica/source/components/utilities/utcopy.c
+  acpica/source/components/utilities/utdebug.c
+  acpica/source/components/utilities/utdecode.c
+  acpica/source/components/utilities/utdelete.c
+  acpica/source/components/utilities/uterror.c
+  acpica/source/components/utilities/uteval.c
+  acpica/source/components/utilities/utexcep.c
+  acpica/source/components/utilities/utglobal.c
+  acpica/source/components/utilities/uthex.c
+  acpica/source/components/utilities/utids.c
+  acpica/source/components/utilities/utinit.c
+  acpica/source/components/utilities/utlock.c
+  acpica/source/components/utilities/utmath.c
+  acpica/source/components/utilities/utmisc.c
+  acpica/source/components/utilities/utmutex.c
+  acpica/source/components/utilities/utnonansi.c
+  acpica/source/components/utilities/utobject.c
+  acpica/source/components/utilities/utosi.c
+  acpica/source/components/utilities/utownerid.c
+  acpica/source/components/utilities/utpredef.c
+  acpica/source/components/utilities/utprint.c
+  acpica/source/components/utilities/utresdecode.c
+  acpica/source/components/utilities/utresrc.c
+  acpica/source/components/utilities/utstate.c
+  acpica/source/components/utilities/utstring.c
+  acpica/source/components/utilities/utstrsuppt.c
+  acpica/source/components/utilities/utstrtoul64.c
+  acpica/source/components/utilities/uttrack.c
+  acpica/source/components/utilities/utuuid.c
+  acpica/source/components/utilities/utxface.c
+  acpica/source/components/utilities/utxferror.c
+  acpica/source/components/utilities/utxfinit.c
+  acpica/source/components/utilities/utxfmutex.c
+  # parser (all .c)
+  acpica/source/components/parser/psargs.c
+  acpica/source/components/parser/psloop.c
+  acpica/source/components/parser/psobject.c
+  acpica/source/components/parser/psopcode.c
+  acpica/source/components/parser/psopinfo.c
+  acpica/source/components/parser/psparse.c
+  acpica/source/components/parser/psscope.c
+  acpica/source/components/parser/pstree.c
+  acpica/source/components/parser/psutils.c
+  acpica/source/components/parser/pswalk.c
+  acpica/source/components/parser/psxface.c
+  # dispatcher: dswstate.c only (walk-state state machine)
+  acpica/source/components/dispatcher/dswstate.c
+  # namespace subset (link-error driven)
+  acpica/source/components/namespace/nsaccess.c
+  acpica/source/components/namespace/nsnames.c
+  acpica/source/components/namespace/nsutils.c
+  acpica/source/components/namespace/nsxfname.c
+  # disassembler (all .c)
+  acpica/source/components/disassembler/dmbuffer.c
+  acpica/source/components/disassembler/dmcstyle.c
+  acpica/source/components/disassembler/dmdeferred.c
+  acpica/source/components/disassembler/dmnames.c
+  acpica/source/components/disassembler/dmopcode.c
+  acpica/source/components/disassembler/dmresrc.c
+  acpica/source/components/disassembler/dmresrcl.c
+  acpica/source/components/disassembler/dmresrcl2.c
+  acpica/source/components/disassembler/dmresrcs.c
+  acpica/source/components/disassembler/dmutils.c
+  acpica/source/components/disassembler/dmwalk.c
+  # common: ACPI hardware-ID / predefined-name / UUID lookup tables.
+  # Runtime-relevant: dmopcode.c (predefined names) and dmbuffer.c
+  # (EISA ID / UUID descriptions) call AcpiAhMatch* during disassembly.
+  # Deps are in-closure: AcpiUtConvertStringToUuid (utuuid.c) and the
+  # str* C-library functions (ported into AcpicaStubs.c).
+  acpica/source/common/ahids.c
+  acpica/source/common/ahpredef.c
+  acpica/source/common/ahuuids.c
+  # port layer
+  AcpicaOsUefi.c
+  AcpicaStubs.c
+  AcpicaDisasmApi.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  AcpicaPkg/AcpicaPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  MemoryAllocationLib
+  DebugLib
+  UefiBootServicesTableLib
+  UefiLib
+  PrintLib

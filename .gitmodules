@@ -1,0 +1,3 @@
+[submodule "Library/AcpicaDisasmLib/acpica"]
+	path = Library/AcpicaDisasmLib/acpica
+	url = https://github.com/acpica/acpica.git
