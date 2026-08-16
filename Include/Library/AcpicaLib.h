@@ -75,7 +75,21 @@ typedef struct {
 
   On failure *OutText is NULL, *OutSize is 0, *OutMap is NULL and
   *OutMapCount is 0.
+
+  @param[in] ProgressCb  Optional (M15). Progress notification fired
+                         periodically while the disassembly pass runs:
+                         Percent is 0-100 (estimated from the walk's
+                         current AML offset vs TableLen). The callback
+                         runs on the disassembly thread (UEFI single
+                         thread) — callers may lv_refr_now() there to
+                         render a progress bar so a large table does not
+                         look hung. NULL = no notifications.
+  @param[in] ProgressCtx Opaque context passed to ProgressCb.
 **/
+
+/* M15 progress callback type (must precede the function declaration).
+   Kept as a plain function-pointer parameter (no typedef) so the header
+   compiles in any include order. */
 EFI_STATUS
 AcpicaDisasmAmlEx (
   const UINT8      *AmlTable,
@@ -83,7 +97,9 @@ AcpicaDisasmAmlEx (
   UINT8            **OutText,
   UINTN            *OutSize,
   ACPI_AML_ROW_MAP **OutMap,
-  UINTN            *OutMapCount
+  UINTN            *OutMapCount,
+  VOID             (*ProgressCb) (UINT32 Percent, VOID *Context),
+  VOID             *ProgressCtx
   );
 
 #endif /* ACPICALIB_H_ */

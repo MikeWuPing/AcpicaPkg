@@ -127,6 +127,11 @@ typedef struct {
   ACPI_DM_PENDING   *Pending;   /* in-flight entries (LIFO) */
   UINTN              PendCount;
   UINTN              PendCap;
+  /* M15 progress: fired periodically from the descending callback
+     (every 2048 ops), Percent = AmlOff*100/TableLen. */
+  VOID             (*ProgressCb) (UINT32 Percent, VOID *Context);
+  VOID             *ProgressCtx;
+  UINTN            ProgressTick;   /* op counter since last notification */
 } ACPI_DM_CTX;
 
 static ACPI_STATUS
@@ -369,6 +374,33 @@ AcpiDmDescendingOp (
   if (ACPI_FAILURE (Status))
   {
     return Status;
+  }
+
+  /* M15 progress: every 2048 ops, notify the caller with the walk's AML
+     progress (Percent 0-100). The callback may render a progress bar
+     (lv_refr_now) so a large table does not look hung. 2048 keeps the
+     render cost low on slow emulators (every-op lv_refr_now would stall
+     the walk); a 256KB table visits ~100k+ ops -> ~50 notifications. */
+  if (Ctx->ProgressCb != NULL)
+  {
+    if (++Ctx->ProgressTick >= 2048)
+    {
+      UINTN AmlOff;
+
+      Ctx->ProgressTick = 0;
+      AmlOff = (UINTN) Op->Common.Aml - (UINTN) Ctx->StartAml;
+      if (Ctx->TableLen > 0)
+      {
+        UINT32 Pct = (UINT32) ((AmlOff * 100) / Ctx->TableLen);
+
+        if (Pct > 100)
+        {
+          Pct = 100;
+        }
+
+        Ctx->ProgressCb (Pct, Ctx->ProgressCtx);
+      }
+    }
   }
 
   /* Determine which file this parse node is contained in. (dmwalk.c L528) */
@@ -1328,7 +1360,9 @@ AcpicaDisasmAmlEx (
   UINT8            **OutText,
   UINTN            *OutSize,
   ACPI_AML_ROW_MAP **OutMap,
-  UINTN            *OutMapCount
+  UINTN            *OutMapCount,
+  VOID             (*ProgressCb) (UINT32 Percent, VOID *Context),
+  VOID             *ProgressCtx
   )
 {
   ACPI_STATUS       Status;
@@ -1395,7 +1429,10 @@ AcpicaDisasmAmlEx (
   }
 
   ZeroMem (&Ctx, sizeof (Ctx));
-  Ctx.Record = (OutMap != NULL);
+  Ctx.Record      = (OutMap != NULL);
+  Ctx.ProgressCb  = ProgressCb;
+  Ctx.ProgressCtx = ProgressCtx;
+  Ctx.ProgressTick = 0;
 
   AcpicaOsSetOutput (Buf, Cap);
   AcpicaOsClearOutput ();

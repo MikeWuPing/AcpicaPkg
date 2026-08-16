@@ -299,7 +299,12 @@ AcpiOsVprintf (
     NewBuf = AllocatePool (NewCap);
     if (NewBuf == NULL)
     {
-      /* Cannot grow: keep what we have (spare byte guaranteed). */
+      /* Cannot grow: keep what we have (spare byte guaranteed). M15: log
+         the truncation — a silent cut is exactly what a partial ASL view
+         looks like on real machines with tight pools (256KB tables produce
+         ~1MB of ASL text; growth doubling can hit alloc failure). */
+      DEBUG ((DEBUG_WARN, "[Acpica] output grow fail cap=0x%x len=0x%x -> TRUNCATED\n",
+              (UINT32) gOutCap, (UINT32) gOutLen));
       return;
     }
 
