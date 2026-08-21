@@ -357,11 +357,19 @@ AcpiOsPrintf (
   ...
   )
 {
-  va_list Args;
+  /* AARCH64 (2026-08-21): build the EDK2 VA_LIST with the VA_START
+     intrinsic at the true variadic entry and hand it straight to the
+     worker. The earlier approach (C va_list -> hand-built VA_LIST struct,
+     Task 5 fix round 1) reads parameters at the wrong offset on
+     MSVC ARM64: '%*.a' widths came out huge -> endless output-buffer
+     growth -> disassembly text reduced to "{\n". VA_START is the same
+     intrinsic path AsciiSPrint uses, which is verified working in the
+     app. */
+  VA_LIST VaArgs;
 
-  va_start (Args, Format);
-  AcpiOsVprintf (Format, Args);
-  va_end (Args);
+  VA_START (VaArgs, Format);
+  AcpicaOsVprintfWorker (Format, VaArgs);
+  VA_END (VaArgs);
 }
 
 void
