@@ -7,7 +7,8 @@
 
   - memory       -> AllocatePool / FreePool
   - output       -> PrintLib AsciiVSPrint appended to a growable RAM buffer
-  - time/stall   -> GetPerformanceCounter / gBS->Stall
+  - time/stall   -> monotonic counter (TSC x64 / CNTPCT_EL0 AARCH64) /
+                    gBS->Stall
   - locks/semas  -> single-threaded model: dummy handles, no-op operations
   - cache OSL    -> plain-alloc passthrough (upstream utcache.c is NOT
                     compiled; AcpiUtCreateCaches still calls these from
@@ -243,10 +244,15 @@ AcpicaTranslateFormat (
   return Buf;
 }
 
-void
-AcpiOsVprintf (
+/* Internal worker: appends one formatted chunk to gOutBuf. Takes the EDK2
+   VA_LIST built from the incoming C va_list (see AcpiOsVprintf) - never a
+   placeholder: BasePrintLib's AsciiVSPrint -> BasePrintLibSPrintMarker
+   consumes the marker directly via VA_ARG, so it must point at the real
+   spill area. */
+static void
+AcpicaOsVprintfWorker (
   const char *Format,
-  va_list    Args
+  VA_LIST    Args
   )
 {
   UINTN Len;
@@ -268,7 +274,7 @@ AcpiOsVprintf (
             (CHAR8 *)gOutBuf + gOutLen,
             gOutCap - gOutLen,
             (const CHAR8 *)AcpicaTranslateFormat (Format),
-            (VA_LIST) Args
+            Args
             );
     if (Len < gOutCap - gOutLen - 1)
     {
@@ -316,6 +322,36 @@ AcpiOsVprintf (
 }
 
 void
+AcpiOsVprintf (
+  const char *Format,
+  va_list    Args
+  )
+{
+#if defined (_M_ARM64)
+  /* MSVC ARM64: the C va_list is a compiler-managed char* (MS ABI) while
+     EDK2's VA_LIST (Base.h _M_ARM64 branch) is an AAPCS64-layout struct,
+     so the direct cast is a C2440. The pointer value IS the same one an
+     EDK2 VA_START would compute at the variadic entry (both run the
+     __va_start intrinsic with the same last-named-argument address and
+     slot size), and VA_ARG on MSVC ARM64 always walks the Stack field
+     (GrOffs starts at 0 and turns positive on the first fetch) - so
+     translating the pointer into the struct is behavior-identical to
+     VA_START. The struct is NOT a placeholder: AsciiVSPrint ->
+     BasePrintLibSPrintMarker VA_ARGs the marker directly. */
+  VA_LIST  VaArgs;
+
+  VaArgs.Stack  = (CHAR8 *)Args;
+  VaArgs.GrTop  = NULL;
+  VaArgs.VrTop  = NULL;
+  VaArgs.GrOffs = 0;
+  VaArgs.VrOffs = 0;
+#else
+  VA_LIST  VaArgs = (VA_LIST)Args;
+#endif
+  AcpicaOsVprintfWorker (Format, VaArgs);
+}
+
+void
 AcpiOsPrintf (
   const char *Format,
   ...
@@ -347,10 +383,17 @@ AcpiOsGetTimer (
   VOID
   )
 {
-  /* Raw TSC counter; only used for relative comparisons. BaseLib
-     AsmReadTsc is the TSC source - EDK2 TimerLib is deliberately not
-     mapped in the app DSC (M8 Task 7). */
+  /* Raw monotonic counter; only used for relative comparisons. X64:
+     TSC via AsmReadTsc. AARCH64: CNTPCT_EL0 via MdePkg BaseLib's
+     ArmReadCntPctReg - the same system counter LvglUefiPort's TickTimer
+     reads, but an official BaseLib symbol so AcpicaPkg has no hidden
+     dependency on LvglUefiPort (no TimerLib mapping needed; EDK2 TimerLib
+     is deliberately not mapped in the app DSC, M8 Task 7 / Task 2 ARM64). */
+#if defined (MDE_CPU_AARCH64)
+  return ArmReadCntPctReg ();
+#else
   return AsmReadTsc ();
+#endif
 }
 
 void
