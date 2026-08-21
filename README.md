@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![ACPICA](https://img.shields.io/badge/ACPICA-20260408-green.svg)](https://github.com/acpica/acpica)
 [![EDK2](https://img.shields.io/badge/Platform-UEFI%20/%20EDK2-orange.svg)](https://github.com/tianocore/edk2)
-[![Arch](https://img.shields.io/badge/Arch-X64-blueviolet.svg)](AcpicaPkg.dsc)
+[![Arch](https://img.shields.io/badge/Arch-X64%2FAArch64-blueviolet.svg)](AcpicaPkg.dsc)
 
 **ACPICA AML 反编译器 for UEFI** —— 一个把 [ACPICA](https://github.com/acpica/acpica) 的 AML 反编译引擎搬进 UEFI 固件环境的 EDK2 软件包，以 `AcpicaLib` 库形式提供唯一的公开入口 `AcpicaDisasmAmlEx()`，可把 DSDT/SSDT 等 ACPI 表反编译为 ASL 文本，并同步产出 **ASL 行 ↔ AML 字节的映射表**，支撑界面层的双向联动展示。
 
@@ -73,13 +73,17 @@ git submodule update --init
 # Windows / MSVC
 edksetup.bat
 build -p AcpicaPkg/AcpicaPkg.dsc -a X64 -t VS2019
+build -p AcpicaPkg/AcpicaPkg.dsc -a AARCH64 -t VS2019
 
 # Linux / GCC
 source edksetup.sh
 build -p AcpicaPkg/AcpicaPkg.dsc -a X64 -t GCC5
+build -p AcpicaPkg/AcpicaPkg.dsc -a AARCH64 -t GCC
 ```
 
 包的 DSC 会把反编译器库编译并链接通过（产物在 `Build/AcpicaPkg`）。`AcpicaPkg.dsc` 是**库级**构建——它验证移植层能编译、能链接，要跑起来还需要一个消费它的应用（见下节）。`DEBUG`/`RELEASE`/`NOOPT` 三种目标均支持。
+
+**架构支持：** `SUPPORTED_ARCHITECTURES = X64|AARCH64`。AARCH64 的关键适配点在 OSL 层（`AcpicaOsUefi.c`）：MSVC ARM64 的 C `va_list` 与 EDK2 的 `VA_LIST`（AAPCS64 结构体）不兼容，`AcpiOsPrintf` 在变参入口用 EDK2 `VA_START` intrinsic 构建（与 `AsciiSPrint` 同路径，实测 DSDT 反编译 47KB 文本正常）；单调计数器在 AARCH64 用 `ArmReadCntPctReg()`（`CNTPCT_EL0`），X64 用 TSC。
 
 ## 接入你自己的包
 
@@ -152,7 +156,7 @@ DisasmOneTable (const UINT8 *AmlTable, UINTN TableLen)
 
 ## 环境要求与已知限制
 
-**环境要求：** EDK2（仅 `MdePkg`）、X64 架构、DXE 阶段、MSVC（VS2019/2022）或 GCC 工具链。
+**环境要求：** EDK2（仅 `MdePkg`）、**X64 或 AARCH64 架构**（AARCH64 的 MSVC 路径需 VS2019 ARM64 编译工具）、DXE 阶段、MSVC（VS2019/2022）或 GCC 工具链。
 
 **已知限制：**
 - 仅 X64；纯反编译（disassembler）用途——执行器、事件、硬件、表格管理、调试器、编译器组件未编译，`AcpicaStubs.c` 对执行路径符号提供的是"必须不会触发的绊线"，不可用于 AML 解释执行。
@@ -232,13 +236,17 @@ git submodule update --init
 # Windows / MSVC
 edksetup.bat
 build -p AcpicaPkg/AcpicaPkg.dsc -a X64 -t VS2019
+build -p AcpicaPkg/AcpicaPkg.dsc -a AARCH64 -t VS2019
 
 # Linux / GCC
 source edksetup.sh
 build -p AcpicaPkg/AcpicaPkg.dsc -a X64 -t GCC5
+build -p AcpicaPkg/AcpicaPkg.dsc -a AARCH64 -t GCC
 ```
 
 The package DSC compiles and links the disassembler library (output under `Build/AcpicaPkg`). Note that `AcpicaPkg.dsc` is a *library* build — it validates that the port compiles and links; a runnable image needs a consuming application (see below). Both `DEBUG`/`RELEASE`/`NOOPT` targets are supported.
+
+**Architecture support:** `SUPPORTED_ARCHITECTURES = X64|AARCH64`. The AARCH64 adaptation lives in the OSL (`AcpicaOsUefi.c`): MSVC-ARM64's C `va_list` is incompatible with EDK2's `VA_LIST` (AAPCS64 struct), so `AcpiOsPrintf` builds the EDK2 `VA_LIST` with the `VA_START` intrinsic at the variadic entry (same path as `AsciiSPrint`; verified: DSDT disassembly produces 47KB of ASL text on AARCH64); the monotonic counter uses `ArmReadCntPctReg()` (`CNTPCT_EL0`) on AARCH64 and TSC on X64.
 
 ## Integrate into your package
 
@@ -315,7 +323,7 @@ The interesting engineering is in the details, most of which took real debugging
 **Requirements:** EDK2 (`MdePkg` only), X64 architecture, DXE phase, MSVC (VS2019/2022) or GCC toolchain.
 
 **Known limitations:**
-- X64 only; disassembly-only — the executer, events, hardware, tables, debugger and compiler components are not compiled; the execution-path symbols in `AcpicaStubs.c` are tripwires that must never fire, so the library cannot interpret/execute AML.
+- X64 / AARCH64; disassembly-only — the executer, events, hardware, tables, debugger and compiler components are not compiled; the execution-path symbols in `AcpicaStubs.c` are tripwires that must never fire, so the library cannot interpret/execute AML. On AARCH64 the OSL adapts the MSVC-ARM64 `va_list` → EDK2 `VA_LIST` gap via the `VA_START` intrinsic at the `AcpiOsPrintf` variadic entry, and the monotonic counter uses `ArmReadCntPctReg()` (`CNTPCT_EL0`) instead of TSC.
 - Disassembly semantics are "no `-e` external resolution": unresolved names are emitted as written — good for viewing/editing, not for recompiling into a loadable image (use `iasl` with an external-symbol table for that).
 - Input must be a complete ACPI table image (36-byte header + AML byte stream); shorter inputs are rejected up front.
 - Text and mapping output are allocated with `AllocatePool`; the caller frees them with `FreePool`.
